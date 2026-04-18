@@ -1,0 +1,15 @@
+alembic<2.0,>=1.13
+fastapi<0.116,>=0.115
+gunicorn<24.0,>=23.0
+itsdangerous<3.0,>=2.2
+pydantic-settings<3.0,>=2.6
+psycopg[binary]<4.0,>=3.2
+python-multipart<1.0,>=0.0.12
+sqlalchemy<3.0,>=2.0.36
+starlette<0.42,>=0.41
+uvicorn[standard]<1.0,>=0.32
+
+[dev]
+httpx<1.0,>=0.28
+pytest<9.0,>=8.3
+pytest-asyncio<1.0,>=0.24
