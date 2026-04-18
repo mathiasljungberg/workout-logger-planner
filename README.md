@@ -55,6 +55,9 @@ Personal training tracker for planning workouts, authoring progression-focused t
 
 Default seeded credentials come from `.env` and default to `admin` / `admin`.
 
+In local frontend development, requests to `/api` are proxied by Vite to `http://localhost:8000`, so login works even if `VITE_API_BASE_URL` is unset in the web process. Use `VITE_API_BASE_URL` only when you need the frontend to call a different backend origin explicitly.
+When the frontend calls the backend directly across ports, FastAPI allows the dev origin configured by `CORS_ORIGINS`, which defaults to `http://localhost:5173`.
+
 ## Verification
 
 - Backend tests:

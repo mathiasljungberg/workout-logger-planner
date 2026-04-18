@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
 
+from pydantic import BeforeValidator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _parse_csv(value: str | list[str]) -> list[str]:
+    if isinstance(value, list):
+        return value
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 class Settings(BaseSettings):
@@ -13,6 +21,7 @@ class Settings(BaseSettings):
     admin_password: str = "admin"
     database_url: str = "sqlite:///./app.db"
     frontend_dist_dir: str = "app/static"
+    cors_origins: Annotated[list[str], BeforeValidator(_parse_csv)] = ["http://localhost:5173"]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -27,4 +36,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-
