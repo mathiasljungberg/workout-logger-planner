@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,8 +13,15 @@ router = APIRouter(prefix="/exercises", tags=["exercises"])
 
 
 @router.get("", response_model=list[ExerciseRead])
-def list_exercises(_: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[Exercise]:
-    return list(db.scalars(select(Exercise).order_by(Exercise.name)).all())
+def list_exercises(
+    include_archived: bool = Query(default=False),
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Exercise]:
+    query = select(Exercise).order_by(Exercise.name)
+    if not include_archived:
+        query = query.where(Exercise.archived_at.is_(None))
+    return list(db.scalars(query).all())
 
 
 @router.post("", response_model=ExerciseRead, status_code=status.HTTP_201_CREATED)

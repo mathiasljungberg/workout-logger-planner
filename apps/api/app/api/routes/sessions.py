@@ -7,55 +7,45 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import PlannedWorkout, SetEntry, User, WorkoutSession, WorkoutSessionExercise
-from app.schemas.domain import WorkoutSessionCreate
+from app.schemas.domain import (
+    SetEntryRead,
+    WorkoutSessionCreate,
+    WorkoutSessionDetail,
+    WorkoutSessionExerciseRead,
+)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-def _serialize_session(item: WorkoutSession) -> dict:
-    return {
-        "id": item.id,
-        "planned_workout_id": item.planned_workout_id,
-        "started_at": item.started_at,
-        "ended_at": item.ended_at,
-        "status": item.status,
-        "title": item.title,
-        "session_notes": item.session_notes,
-        "exercises": [
-            {
-                "id": exercise.id,
-                "exercise_id": exercise.exercise_id,
-                "planned_workout_exercise_id": exercise.planned_workout_exercise_id,
-                "order_index": exercise.order_index,
-                "exercise_name_snapshot": exercise.exercise_name_snapshot,
-                "notes": exercise.notes,
-                "target_sets": exercise.target_sets,
-                "target_reps": exercise.target_reps,
-                "target_weight": exercise.target_weight,
-                "target_duration_seconds": exercise.target_duration_seconds,
-                "target_distance_meters": exercise.target_distance_meters,
-                "target_rpe": exercise.target_rpe,
-                "completed": exercise.completed,
-                "set_entries": [
-                    {
-                        "id": set_entry.id,
-                        "set_number": set_entry.set_number,
-                        "set_type": set_entry.set_type,
-                        "completed": set_entry.completed,
-                        "reps": set_entry.reps,
-                        "weight": set_entry.weight,
-                        "duration_seconds": set_entry.duration_seconds,
-                        "distance_meters": set_entry.distance_meters,
-                        "rpe": set_entry.rpe,
-                        "rest_seconds": set_entry.rest_seconds,
-                        "comment": set_entry.comment,
-                    }
-                    for set_entry in exercise.set_entries
-                ],
-            }
+def _serialize_session(item: WorkoutSession) -> WorkoutSessionDetail:
+    return WorkoutSessionDetail(
+        id=item.id,
+        planned_workout_id=item.planned_workout_id,
+        started_at=item.started_at,
+        ended_at=item.ended_at,
+        status=item.status,
+        title=item.title,
+        session_notes=item.session_notes,
+        exercises=[
+            WorkoutSessionExerciseRead(
+                id=exercise.id,
+                exercise_id=exercise.exercise_id,
+                planned_workout_exercise_id=exercise.planned_workout_exercise_id,
+                order_index=exercise.order_index,
+                exercise_name_snapshot=exercise.exercise_name_snapshot,
+                notes=exercise.notes,
+                target_sets=exercise.target_sets,
+                target_reps=exercise.target_reps,
+                target_weight=exercise.target_weight,
+                target_duration_seconds=exercise.target_duration_seconds,
+                target_distance_meters=exercise.target_distance_meters,
+                target_rpe=exercise.target_rpe,
+                completed=exercise.completed,
+                set_entries=[SetEntryRead.model_validate(se) for se in exercise.set_entries],
+            )
             for exercise in item.exercises
         ],
-    }
+    )
 
 
 def _apply_session_payload(item: WorkoutSession, payload: WorkoutSessionCreate) -> None:
@@ -86,8 +76,8 @@ def _apply_session_payload(item: WorkoutSession, payload: WorkoutSessionCreate) 
         item.exercises.append(session_exercise)
 
 
-@router.get("/{session_id}")
-def get_session(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+@router.get("/{session_id}", response_model=WorkoutSessionDetail)
+def get_session(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> WorkoutSessionDetail:
     item = db.scalar(
         select(WorkoutSession)
         .options(selectinload(WorkoutSession.exercises).selectinload(WorkoutSessionExercise.set_entries))
@@ -98,8 +88,8 @@ def get_session(session_id: str, user: User = Depends(get_current_user), db: Ses
     return _serialize_session(item)
 
 
-@router.get("")
-def list_sessions(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[dict]:
+@router.get("", response_model=list[WorkoutSessionDetail])
+def list_sessions(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[WorkoutSessionDetail]:
     items = db.scalars(
         select(WorkoutSession)
         .options(selectinload(WorkoutSession.exercises).selectinload(WorkoutSessionExercise.set_entries))
@@ -109,12 +99,12 @@ def list_sessions(user: User = Depends(get_current_user), db: Session = Depends(
     return [_serialize_session(item) for item in items]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=WorkoutSessionDetail)
 def create_session(
     payload: WorkoutSessionCreate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict:
+) -> WorkoutSessionDetail:
     if payload.planned_workout_id:
         planned_workout = db.scalar(
             select(PlannedWorkout)
@@ -139,13 +129,13 @@ def create_session(
     return _serialize_session(item)
 
 
-@router.patch("/{session_id}")
+@router.patch("/{session_id}", response_model=WorkoutSessionDetail)
 def update_session(
     session_id: str,
     payload: WorkoutSessionCreate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict:
+) -> WorkoutSessionDetail:
     item = db.scalar(
         select(WorkoutSession)
         .options(selectinload(WorkoutSession.exercises).selectinload(WorkoutSessionExercise.set_entries))
@@ -165,4 +155,3 @@ def update_session(
         .where(WorkoutSession.id == session_id)
     )
     return _serialize_session(item)
-

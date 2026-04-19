@@ -2,42 +2,36 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { Card } from "../../components/Card";
 import { Page } from "../../components/Page";
-import { api } from "../../lib/api/client";
-import { Exercise, TrainingBlock } from "../../lib/api/types";
+import { QueryBoundary } from "../../components/QueryBoundary";
+import { useBlocks, useExercises } from "../../lib/api/queries";
+import { useCreateBlock, useGeneratePlannedWorkouts } from "../../lib/api/mutations";
 
 export function BlocksPage() {
-  const [blocks, setBlocks] = useState<TrainingBlock[]>([]);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const { data: blocks = [], isLoading, error } = useBlocks();
+  const { data: exercises = [] } = useExercises();
+  const createBlock = useCreateBlock();
+  const generatePlannedWorkouts = useGeneratePlannedWorkouts();
+
   const [name, setName] = useState("");
   const [exerciseId, setExerciseId] = useState("");
 
-  async function load() {
-    const [blockData, exerciseData] = await Promise.all([
-      api.get<TrainingBlock[]>("/blocks"),
-      api.get<Exercise[]>("/exercises"),
-    ]);
-    setBlocks(blockData);
-    setExercises(exerciseData);
-    if (!exerciseId && exerciseData[0]) {
-      setExerciseId(exerciseData[0].id);
-    }
-  }
-
   useEffect(() => {
-    load().catch(console.error);
-  }, []);
+    if (!exerciseId && exercises[0]) {
+      setExerciseId(exercises[0].id);
+    }
+  }, [exercises, exerciseId]);
 
-  async function createBlock(event: FormEvent) {
+  async function handleCreate(event: FormEvent) {
     event.preventDefault();
     if (!name || !exerciseId) return;
-    await api.post("/blocks", {
+    await createBlock.mutateAsync({
       name,
       status: "draft",
       progression_rules: [
         {
           name: "Default progression",
-          rule_type: "double_progression",
-          config_json: { reps_ceiling: 10, weight_increment: 2.5 },
+          rule_type: "fixed_increment",
+          config_json: { weight_increment: 2.5 },
         },
       ],
       workouts: [
@@ -52,18 +46,21 @@ export function BlocksPage() {
               target_sets: 3,
               target_reps: "6-8",
               target_weight: 60,
+              manual_override: false,
             },
           ],
         },
       ],
     });
     setName("");
-    await load();
   }
 
   async function generate(blockId: string) {
     const start = new Date().toISOString().slice(0, 10);
-    await api.post(`/blocks/${blockId}/generate-planned-workouts`, { start_date: start, weeks: 4 });
+    await generatePlannedWorkouts.mutateAsync({
+      blockId,
+      payload: { start_date: start, weeks: 4 },
+    });
   }
 
   return (
@@ -71,7 +68,7 @@ export function BlocksPage() {
       <div className="layout-two">
         <Card>
           <h3>New block</h3>
-          <form className="stack" onSubmit={createBlock}>
+          <form className="stack" onSubmit={handleCreate}>
             <label>
               Name
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Hypertrophy Block" />
@@ -86,25 +83,30 @@ export function BlocksPage() {
                 ))}
               </select>
             </label>
-            <button type="submit">Create block</button>
+            <button type="submit" disabled={createBlock.isPending}>
+              {createBlock.isPending ? "Creating..." : "Create block"}
+            </button>
           </form>
         </Card>
-        <div className="grid">
-          {blocks.map((block) => (
-            <Card key={block.id}>
-              <div className="row">
-                <h3>{block.name}</h3>
-                <span className="pill">{block.status}</span>
-              </div>
-              <p>{block.goal || "No goal set"}</p>
-              <p>{block.progression_rules.length} progression rules</p>
-              <p>{block.workouts.length} authored workouts</p>
-              <button onClick={() => generate(block.id)}>Generate 4 weeks</button>
-            </Card>
-          ))}
-        </div>
+        <QueryBoundary isLoading={isLoading} error={error} loadingLabel="Loading blocks...">
+          <div className="grid">
+            {blocks.map((block) => (
+              <Card key={block.id}>
+                <div className="row">
+                  <h3>{block.name}</h3>
+                  <span className="pill">{block.status}</span>
+                </div>
+                <p>{block.goal || "No goal set"}</p>
+                <p>{block.progression_rules.length} progression rules</p>
+                <p>{block.workouts.length} authored workouts</p>
+                <button onClick={() => generate(block.id)} disabled={generatePlannedWorkouts.isPending}>
+                  {generatePlannedWorkouts.isPending ? "Generating..." : "Generate 4 weeks"}
+                </button>
+              </Card>
+            ))}
+          </div>
+        </QueryBoundary>
       </div>
     </Page>
   );
 }
-

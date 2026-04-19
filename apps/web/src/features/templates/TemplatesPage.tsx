@@ -2,8 +2,9 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { Card } from "../../components/Card";
 import { Page } from "../../components/Page";
-import { api } from "../../lib/api/client";
-import { Exercise, WorkoutTemplate } from "../../lib/api/types";
+import { QueryBoundary } from "../../components/QueryBoundary";
+import { useExercises, useTemplates } from "../../lib/api/queries";
+import { useCreateTemplate } from "../../lib/api/mutations";
 
 type TemplateDraftExercise = {
   exercise_id: string;
@@ -40,30 +41,21 @@ function toOptionalNumber(value: string): number | null {
 }
 
 export function TemplatesPage() {
-  const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const { data: templates = [], isLoading, error } = useTemplates();
+  const { data: exercises = [] } = useExercises();
+  const createTemplate = useCreateTemplate();
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [draftExercises, setDraftExercises] = useState<TemplateDraftExercise[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  async function load() {
-    const [templateData, exerciseData] = await Promise.all([
-      api.get<WorkoutTemplate[]>("/templates"),
-      api.get<Exercise[]>("/exercises"),
-    ]);
-    setTemplates(templateData);
-    setExercises(exerciseData);
-    if (draftExercises.length === 0 && exerciseData[0]) {
-      setDraftExercises([createDraftExercise(exerciseData[0].id, 0)]);
-    }
-  }
-
   useEffect(() => {
-    load().catch(console.error);
-  }, []);
+    if (draftExercises.length === 0 && exercises[0]) {
+      setDraftExercises([createDraftExercise(exercises[0].id, 0)]);
+    }
+  }, [exercises, draftExercises.length]);
 
   function addExerciseRow() {
     const fallbackExerciseId = exercises[0]?.id ?? "";
@@ -89,33 +81,31 @@ export function TemplatesPage() {
   function resetForm() {
     setName("");
     setDescription("");
-    setError(null);
-    setSuccessMessage(null);
+    setFormError(null);
     setDraftExercises(exercises[0] ? [createDraftExercise(exercises[0].id, 0)] : []);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
+    setFormError(null);
     setSuccessMessage(null);
 
     const cleanedName = name.trim();
     if (!cleanedName) {
-      setError("Template name is required.");
+      setFormError("Template name is required.");
       return;
     }
     if (draftExercises.length === 0) {
-      setError("Add at least one exercise.");
+      setFormError("Add at least one exercise.");
       return;
     }
     if (draftExercises.some((exercise) => !exercise.exercise_id)) {
-      setError("Each exercise row must have an exercise selected.");
+      setFormError("Each exercise row must have an exercise selected.");
       return;
     }
 
-    setSaving(true);
     try {
-      await api.post("/templates", {
+      await createTemplate.mutateAsync({
         name: cleanedName,
         description: description.trim() || null,
         exercises: draftExercises.map((exercise, index) => ({
@@ -130,15 +120,14 @@ export function TemplatesPage() {
           target_rpe: toOptionalNumber(exercise.target_rpe),
         })),
       });
-      await load();
       resetForm();
       setSuccessMessage("Template created.");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to create template.");
-    } finally {
-      setSaving(false);
+      setFormError(caught instanceof Error ? caught.message : "Failed to create template.");
     }
   }
+
+  const saving = createTemplate.isPending;
 
   return (
     <Page title="Templates" description="Templates are reusable starting points. Sessions still snapshot performed work.">
@@ -262,32 +251,34 @@ export function TemplatesPage() {
                 </div>
               ))}
             </div>
-            {error ? <p className="error">{error}</p> : null}
+            {formError ? <p className="error">{formError}</p> : null}
             {successMessage ? <p>{successMessage}</p> : null}
             <button type="submit" disabled={saving || exercises.length === 0}>
               {saving ? "Creating..." : "Create template"}
             </button>
           </form>
         </Card>
-        <div className="grid">
-          {templates.map((template) => (
-            <Card key={template.id}>
-              <h3>{template.name}</h3>
-              {template.description ? <p>{template.description}</p> : null}
-              <ul className="list">
-                {template.exercises.map((exercise) => (
-                  <li key={exercise.id}>
-                    {exercise.exercise_name}
-                    {exercise.target_sets ? ` • ${exercise.target_sets} sets` : ""}
-                    {exercise.target_reps ? ` • ${exercise.target_reps} reps` : ""}
-                    {exercise.target_weight ? ` • ${exercise.target_weight} kg` : ""}
-                    {exercise.notes ? ` • ${exercise.notes}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ))}
-        </div>
+        <QueryBoundary isLoading={isLoading} error={error} loadingLabel="Loading templates...">
+          <div className="grid">
+            {templates.map((template) => (
+              <Card key={template.id}>
+                <h3>{template.name}</h3>
+                {template.description ? <p>{template.description}</p> : null}
+                <ul className="list">
+                  {template.exercises.map((exercise) => (
+                    <li key={exercise.id}>
+                      {exercise.exercise_name}
+                      {exercise.target_sets ? ` • ${exercise.target_sets} sets` : ""}
+                      {exercise.target_reps ? ` • ${exercise.target_reps} reps` : ""}
+                      {exercise.target_weight ? ` • ${exercise.target_weight} kg` : ""}
+                      {exercise.notes ? ` • ${exercise.notes}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ))}
+          </div>
+        </QueryBoundary>
       </div>
     </Page>
   );
