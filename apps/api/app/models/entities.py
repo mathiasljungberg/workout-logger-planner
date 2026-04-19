@@ -166,6 +166,8 @@ class BlockWorkoutExercise(UUIDMixin, TimestampMixin, Base):
     target_duration_seconds: Mapped[int | None] = mapped_column(Integer)
     target_distance_meters: Mapped[int | None] = mapped_column(Integer)
     target_rpe: Mapped[float | None] = mapped_column(Float)
+    manual_override: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    progression_snapshot_json: Mapped[dict | None] = mapped_column(JSON, default=dict)
 
     block_workout: Mapped["BlockWorkout"] = relationship(back_populates="exercises")
     exercise: Mapped["Exercise"] = relationship()

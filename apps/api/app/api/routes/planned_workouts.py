@@ -9,42 +9,46 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import Exercise, PlannedWorkout, PlannedWorkoutExercise, User
-from app.schemas.domain import PlannedWorkoutCreate
+from app.schemas.domain import (
+    PlannedWorkoutCreate,
+    PlannedWorkoutDetail,
+    PlannedWorkoutExerciseRead,
+)
 
 router = APIRouter(prefix="/planned-workouts", tags=["planned-workouts"])
 
 
-def _serialize_planned_workout(item: PlannedWorkout) -> dict:
-    return {
-        "id": item.id,
-        "planned_date": item.planned_date,
-        "planned_start_time": item.planned_start_time,
-        "status": item.status,
-        "title": item.title,
-        "notes": item.notes,
-        "training_block_id": item.training_block_id,
-        "block_workout_id": item.block_workout_id,
-        "workout_template_id": item.workout_template_id,
-        "session_id": item.session.id if item.session else None,
-        "exercises": [
-            {
-                "id": exercise.id,
-                "exercise_id": exercise.exercise_id,
-                "exercise_name_snapshot": exercise.exercise_name_snapshot,
-                "progression_rule_id": exercise.progression_rule_id,
-                "order_index": exercise.order_index,
-                "notes": exercise.notes,
-                "target_sets": exercise.target_sets,
-                "target_reps": exercise.target_reps,
-                "target_weight": exercise.target_weight,
-                "target_duration_seconds": exercise.target_duration_seconds,
-                "target_distance_meters": exercise.target_distance_meters,
-                "target_rpe": exercise.target_rpe,
-                "progression_snapshot_json": exercise.progression_snapshot_json,
-            }
+def _serialize_planned_workout(item: PlannedWorkout) -> PlannedWorkoutDetail:
+    return PlannedWorkoutDetail(
+        id=item.id,
+        planned_date=item.planned_date,
+        planned_start_time=item.planned_start_time,
+        status=item.status,
+        title=item.title,
+        notes=item.notes,
+        training_block_id=item.training_block_id,
+        block_workout_id=item.block_workout_id,
+        workout_template_id=item.workout_template_id,
+        session_id=item.session.id if item.session else None,
+        exercises=[
+            PlannedWorkoutExerciseRead(
+                id=exercise.id,
+                exercise_id=exercise.exercise_id,
+                exercise_name_snapshot=exercise.exercise_name_snapshot,
+                progression_rule_id=exercise.progression_rule_id,
+                order_index=exercise.order_index,
+                notes=exercise.notes,
+                target_sets=exercise.target_sets,
+                target_reps=exercise.target_reps,
+                target_weight=exercise.target_weight,
+                target_duration_seconds=exercise.target_duration_seconds,
+                target_distance_meters=exercise.target_distance_meters,
+                target_rpe=exercise.target_rpe,
+                progression_snapshot_json=exercise.progression_snapshot_json,
+            )
             for exercise in item.exercises
         ],
-    }
+    )
 
 
 def _apply_planned_workout_payload(db: Session, planned_workout: PlannedWorkout, payload: PlannedWorkoutCreate) -> None:
@@ -68,13 +72,13 @@ def _apply_planned_workout_payload(db: Session, planned_workout: PlannedWorkout,
         )
 
 
-@router.get("")
+@router.get("", response_model=list[PlannedWorkoutDetail])
 def list_planned_workouts(
     start: str | None = Query(default=None),
     end: str | None = Query(default=None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[dict]:
+) -> list[PlannedWorkoutDetail]:
     query = (
         select(PlannedWorkout)
         .options(
@@ -91,12 +95,12 @@ def list_planned_workouts(
     return [_serialize_planned_workout(item) for item in db.scalars(query).all()]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=PlannedWorkoutDetail)
 def create_planned_workout(
     payload: PlannedWorkoutCreate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict:
+) -> PlannedWorkoutDetail:
     planned_workout = PlannedWorkout(user_id=user.id, planned_date=payload.planned_date, title=payload.title)
     _apply_planned_workout_payload(db, planned_workout, payload)
     db.add(planned_workout)
@@ -109,13 +113,13 @@ def create_planned_workout(
     return _serialize_planned_workout(planned_workout)
 
 
-@router.patch("/{planned_workout_id}")
+@router.patch("/{planned_workout_id}", response_model=PlannedWorkoutDetail)
 def update_planned_workout(
     planned_workout_id: str,
     payload: PlannedWorkoutCreate,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> dict:
+) -> PlannedWorkoutDetail:
     planned_workout = db.scalar(
         select(PlannedWorkout)
         .options(selectinload(PlannedWorkout.exercises))

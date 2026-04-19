@@ -43,11 +43,25 @@ class WorkoutTemplateCreate(BaseModel):
     exercises: list[WorkoutTemplateExercisePayload] = Field(default_factory=list)
 
 
+class WorkoutTemplateExerciseRead(ORMModel):
+    id: str
+    exercise_id: str
+    exercise_name: str
+    order_index: int
+    notes: str | None = None
+    target_sets: int | None = None
+    target_reps: str | None = None
+    target_weight: float | None = None
+    target_duration_seconds: int | None = None
+    target_distance_meters: int | None = None
+    target_rpe: float | None = None
+
+
 class WorkoutTemplateRead(ORMModel):
     id: str
     name: str
     description: str | None = None
-    exercises: list[dict]
+    exercises: list[WorkoutTemplateExerciseRead]
 
 
 class ProgressionRulePayload(BaseModel):
@@ -61,6 +75,7 @@ class ProgressionRulePayload(BaseModel):
 
 class BlockWorkoutExercisePayload(ExerciseLineBase):
     progression_rule_id: str | None = None
+    manual_override: bool = False
 
 
 class BlockWorkoutPayload(BaseModel):
@@ -132,6 +147,11 @@ class WorkoutSessionCreate(BaseModel):
     exercises: list[WorkoutSessionExercisePayload] = Field(default_factory=list)
 
 
+class AnalyticsDailyVolume(BaseModel):
+    date: str
+    volume: float
+
+
 class AnalyticsResponse(BaseModel):
     adherence_rate: float
     planned_count: int
@@ -139,4 +159,128 @@ class AnalyticsResponse(BaseModel):
     total_sessions: int
     total_completed_sets: int
     total_volume: float
-    recent_volume: list[dict]
+    recent_volume: list[AnalyticsDailyVolume]
+
+
+class ProgressionRuleRead(ORMModel):
+    id: str
+    name: str
+    rule_type: str
+    config_json: dict | None = None
+    deload_strategy: str | None = None
+    notes: str | None = None
+
+
+class BlockWorkoutExerciseRead(ORMModel):
+    id: str
+    exercise_id: str
+    exercise_name: str
+    progression_rule_id: str | None = None
+    order_index: int
+    notes: str | None = None
+    target_sets: int | None = None
+    target_reps: str | None = None
+    target_weight: float | None = None
+    target_duration_seconds: int | None = None
+    target_distance_meters: int | None = None
+    target_rpe: float | None = None
+    manual_override: bool = False
+    progression_snapshot_json: dict | None = None
+
+
+class BlockWorkoutRead(ORMModel):
+    id: str
+    name: str
+    week_index: int
+    day_index: int
+    notes: str | None = None
+    exercises: list[BlockWorkoutExerciseRead]
+
+
+class TrainingBlockDetail(ORMModel):
+    id: str
+    name: str
+    goal: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    status: str
+    progression_rules: list[ProgressionRuleRead]
+    workouts: list[BlockWorkoutRead]
+
+
+class GeneratedPlannedWorkoutRead(BaseModel):
+    id: str
+    planned_date: date
+    title: str
+
+
+class PlannedWorkoutExerciseRead(ORMModel):
+    id: str
+    exercise_id: str
+    exercise_name_snapshot: str
+    progression_rule_id: str | None = None
+    order_index: int
+    notes: str | None = None
+    target_sets: int | None = None
+    target_reps: str | None = None
+    target_weight: float | None = None
+    target_duration_seconds: int | None = None
+    target_distance_meters: int | None = None
+    target_rpe: float | None = None
+    progression_snapshot_json: dict | None = None
+
+
+class PlannedWorkoutDetail(ORMModel):
+    id: str
+    planned_date: date
+    planned_start_time: datetime | None = None
+    status: str
+    title: str
+    notes: str | None = None
+    training_block_id: str | None = None
+    block_workout_id: str | None = None
+    workout_template_id: str | None = None
+    session_id: str | None = None
+    exercises: list[PlannedWorkoutExerciseRead]
+
+
+class SetEntryRead(ORMModel):
+    id: str
+    set_number: int
+    set_type: str
+    completed: bool
+    reps: int | None = None
+    weight: float | None = None
+    duration_seconds: int | None = None
+    distance_meters: int | None = None
+    rpe: float | None = None
+    rest_seconds: int | None = None
+    comment: str | None = None
+
+
+class WorkoutSessionExerciseRead(ORMModel):
+    id: str
+    exercise_id: str | None = None
+    planned_workout_exercise_id: str | None = None
+    order_index: int
+    exercise_name_snapshot: str
+    notes: str | None = None
+    target_sets: int | None = None
+    target_reps: str | None = None
+    target_weight: float | None = None
+    target_duration_seconds: int | None = None
+    target_distance_meters: int | None = None
+    target_rpe: float | None = None
+    completed: bool
+    set_entries: list[SetEntryRead]
+
+
+class WorkoutSessionDetail(ORMModel):
+    id: str
+    planned_workout_id: str | None = None
+    started_at: datetime
+    ended_at: datetime | None = None
+    status: str
+    title: str
+    session_notes: str | None = None
+    exercises: list[WorkoutSessionExerciseRead]

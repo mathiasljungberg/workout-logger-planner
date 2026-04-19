@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { AppShell } from "../components/AppShell";
-import { api } from "../lib/api/client";
+import { useMe } from "../lib/api/queries";
+import { useCreateSession } from "../lib/api/mutations";
+import { queryKeys } from "../lib/api/queries";
 import { PlannedWorkout } from "../lib/api/types";
 import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
 import { LoginPage } from "../features/auth/LoginPage";
@@ -11,8 +13,6 @@ import { CalendarPage } from "../features/calendar/CalendarPage";
 import { SessionPage } from "../features/session/SessionPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { TemplatesPage } from "../features/templates/TemplatesPage";
-
-type AuthUser = { id: string; username: string };
 
 function ProtectedApp({ onStartSession }: { onStartSession: (plannedWorkout: PlannedWorkout) => Promise<void> }) {
   return (
@@ -31,31 +31,17 @@ function ProtectedApp({ onStartSession }: { onStartSession: (plannedWorkout: Pla
 }
 
 export function App() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: user, isLoading } = useMe();
   const navigate = useNavigate();
-
-  async function refreshAuth() {
-    try {
-      const currentUser = await api.get<AuthUser>("/auth/me");
-      setUser(currentUser);
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    refreshAuth().catch(console.error);
-  }, []);
+  const queryClient = useQueryClient();
+  const createSession = useCreateSession();
 
   async function onStartSession(plannedWorkout: PlannedWorkout) {
     if (plannedWorkout.session_id) {
       navigate(`/session/${plannedWorkout.session_id}`);
       return;
     }
-    const session = await api.post<{ id: string }>("/sessions", {
+    const session = await createSession.mutateAsync({
       planned_workout_id: plannedWorkout.id,
       started_at: new Date().toISOString(),
       status: "in_progress",
@@ -70,8 +56,10 @@ export function App() {
         target_reps: exercise.target_reps,
         target_weight: exercise.target_weight,
         notes: exercise.notes,
+        completed: false,
         set_entries: Array.from({ length: exercise.target_sets ?? 1 }, (_, index) => ({
           set_number: index + 1,
+          set_type: "working",
           completed: false,
         })),
       })),
@@ -79,7 +67,11 @@ export function App() {
     navigate(`/session/${session.id}`);
   }
 
-  if (loading) {
+  async function refreshAuth() {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.me });
+  }
+
+  if (isLoading) {
     return <div className="login">Loading...</div>;
   }
 
@@ -92,4 +84,3 @@ export function App() {
     </Routes>
   );
 }
-
